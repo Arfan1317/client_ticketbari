@@ -4,8 +4,8 @@
 
 ## 🔗 Live URL
 
-- **Client**: [https://ticketbari.web.app](https://ticketbari.web.app)
-- **Server**: [https://ticketbari-server.vercel.app](https://ticketbari-server.vercel.app)
+- **Client**: [https://client-ticketbari.vercel.app]
+- **Server**: [https://server-ticketbari.vercel.app]
 
 ## 🔑 Demo Credentials
 
