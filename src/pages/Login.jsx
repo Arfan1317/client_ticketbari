@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FcGoogle } from 'react-icons/fc';
@@ -9,23 +10,30 @@ const Login = () => {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isLoading, setIsLoading] = useState(false);
 
   const from = location.state?.from?.pathname || '/';
 
   const onSubmit = async (data) => {
+    setIsLoading(true);
     try {
       await login(data.email, data.password);
       toast.success('Logged in successfully!');
       navigate(from, { replace: true });
     } catch (error) {
-      toast.error(error.message || 'Failed to login');
+      console.error('Login error:', error);
+      toast.error(error.message || 'Invalid email or password');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     try {
       await loginWithGoogle();
+      // Google OAuth will redirect, no need to navigate
     } catch (error) {
+      console.error('Google login error:', error);
       toast.error(error.message || 'Failed to login with Google');
     }
   };
@@ -63,7 +71,9 @@ const Login = () => {
               {errors.password && <span className="text-error text-sm mt-1">{errors.password.message}</span>}
             </div>
 
-            <button type="submit" className="btn btn-primary w-full mt-4">Login</button>
+            <button type="submit" className="btn btn-primary w-full mt-4" disabled={isLoading}>
+              {isLoading ? <span className="loading loading-spinner loading-sm"></span> : 'Login'}
+            </button>
           </form>
 
           <div className="divider">OR</div>

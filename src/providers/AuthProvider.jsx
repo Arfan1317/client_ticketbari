@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { authClient } from '../lib/auth-client';
 import axiosSecure from '../lib/axios';
 
@@ -11,47 +11,55 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const { data: session, isPending: sessionLoading } = authClient.useSession();
+  const { data: session, isPending: sessionLoading, error: sessionError } = authClient.useSession();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  
+  // Sync user with our backend when BetterAuth session changes
+  const syncUser = useCallback(async (sessionData) => {
+    if (!sessionData?.user) return null;
+    
+    try {
+      // Sync user to our database
+      const syncRes = await axiosSecure.post('/api/users/sync', {
+        authId: sessionData.user.id,
+        name: sessionData.user.name,
+        email: sessionData.user.email,
+        image: sessionData.user.image || '',
+      });
+      
+      // Get JWT token
+      const tokenRes = await axiosSecure.post('/api/jwt', {
+        email: sessionData.user.email,
+      });
+      
+      if (tokenRes.data.token) {
+        localStorage.setItem('access-token', tokenRes.data.token);
+      }
+      
+      return syncRes.data.user;
+    } catch (error) {
+      console.error('Error syncing user:', error);
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
-    const syncUser = async () => {
+    const handleSession = async () => {
+      if (sessionLoading) return; // Still loading, wait
+      
       if (session?.user) {
-        try {
-         
-          const syncRes = await axiosSecure.post('/api/users/sync', {
-            authId: session.user.id,
-            name: session.user.name,
-            email: session.user.email,
-            image: session.user.image || '',
-          });
-          
-         
-          const tokenRes = await axiosSecure.post('/api/jwt', {
-            email: session.user.email,
-          });
-          
-          if (tokenRes.data.token) {
-            localStorage.setItem('access-token', tokenRes.data.token);
-          }
-          
-          setUser(syncRes.data.user);
-        } catch (error) {
-          console.error('Error syncing user:', error);
-        }
-      } else if (!sessionLoading) {
+        const syncedUser = await syncUser(session);
+        setUser(syncedUser);
+      } else {
         setUser(null);
         localStorage.removeItem('access-token');
       }
       setLoading(false);
     };
 
-    if (!sessionLoading) {
-      syncUser();
-    }
-  }, [session, sessionLoading]);
+    handleSession();
+  }, [session, sessionLoading, syncUser]);
 
   const register = async (name, email, password) => {
     const result = await authClient.signUp.email({
@@ -59,6 +67,20 @@ export const AuthProvider = ({ children }) => {
       email,
       password,
     });
+    
+    // BetterAuth returns { data, error } — check for error
+    if (result.error) {
+      throw new Error(result.error.message || 'Registration failed');
+    }
+    
+    // After successful signup, BetterAuth auto-creates a session
+    // The useSession hook will detect it and trigger syncUser via useEffect
+    // But we also sync immediately for instant UI update
+    if (result.data?.user) {
+      const syncedUser = await syncUser({ user: result.data.user });
+      if (syncedUser) setUser(syncedUser);
+    }
+    
     return result;
   };
 
@@ -67,6 +89,17 @@ export const AuthProvider = ({ children }) => {
       email,
       password,
     });
+    
+    if (result.error) {
+      throw new Error(result.error.message || 'Login failed');
+    }
+    
+    // Immediately sync for instant UI update
+    if (result.data?.user) {
+      const syncedUser = await syncUser({ user: result.data.user });
+      if (syncedUser) setUser(syncedUser);
+    }
+    
     return result;
   };
 
@@ -75,11 +108,21 @@ export const AuthProvider = ({ children }) => {
       provider: 'google',
       callbackURL: '/',
     });
+    
+    if (result.error) {
+      throw new Error(result.error.message || 'Google login failed');
+    }
+    
+    // Google OAuth redirects, so session will be picked up on return
     return result;
   };
 
   const logout = async () => {
-    await authClient.signOut();
+    try {
+      await authClient.signOut();
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
     setUser(null);
     localStorage.removeItem('access-token');
   };

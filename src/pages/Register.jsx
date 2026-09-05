@@ -1,20 +1,37 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
+import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../providers/AuthProvider';
 import toast from 'react-hot-toast';
 
 const Register = () => {
   const { register: formRegister, handleSubmit, formState: { errors } } = useForm();
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
 
   const onSubmit = async (data) => {
+    setIsLoading(true);
     try {
       await register(data.name, data.email, data.password);
       toast.success('Registered successfully!');
       navigate('/');
     } catch (error) {
+      console.error('Register error:', error);
       toast.error(error.message || 'Failed to register');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    try {
+      await loginWithGoogle();
+      // Google OAuth will redirect
+    } catch (error) {
+      console.error('Google register error:', error);
+      toast.error(error.message || 'Failed to register with Google');
     }
   };
 
@@ -67,8 +84,17 @@ const Register = () => {
               {errors.password && <span className="text-error text-sm mt-1">{errors.password.message}</span>}
             </div>
 
-            <button type="submit" className="btn btn-primary w-full mt-4">Register</button>
+            <button type="submit" className="btn btn-primary w-full mt-4" disabled={isLoading}>
+              {isLoading ? <span className="loading loading-spinner loading-sm"></span> : 'Register'}
+            </button>
           </form>
+
+          <div className="divider">OR</div>
+
+          <button onClick={handleGoogleRegister} className="btn btn-outline w-full gap-2">
+            <FcGoogle className="text-xl" />
+            Continue with Google
+          </button>
 
           <p className="text-center mt-4">
             Already have an account? <Link to="/login" className="text-primary hover:underline">Login</Link>
